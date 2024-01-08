@@ -1,0 +1,7 @@
+PyJWT~=2.8.0
+flask~=3.0.0
+SQLAlchemy~=2.0.25
+werkzeug~=3.0.1
+psycopg2-binary
+Flask-SQLAlchemy
+

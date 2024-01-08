@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  flask_app:
+    container_name: flask_app
+    image: taskmanager/flask_live_app:1.0.0  # Your Flask app image
+    build: .  # Build context for the Flask app (if necessary)
+    ports:
+      - "9002:9002"  # Expose Flask app's port
+    environment:
+      - DB_URL=postgresql://postgres:vishal@flask_db:5432/task-manager  # Connection URL for the Flask app
+    depends_on:
+      - flask_db  # Ensure Flask app starts after flask_db
+
+  flask_db:
+    container_name: flask_db
+    image: postgres:14  # PostgreSQL image version 14
+    ports:
+      - "5432:5432"  # Expose PostgreSQL's default port
+    environment:
+      - POSTGRES_PASSWORD=vishal  # Set the PostgreSQL password for user 'postgres'
+      - POSTGRES_USER=postgres  # Set the PostgreSQL username
+      - POSTGRES_DB=task-manager  # Create the PostgreSQL database named 'task-manager'
+    volumes:
+      - pgdata:/var/lib/postgresql/data  # Mount a volume for persistent data storage
+
+volumes:
+  pgdata: {}  # Named volume for PostgreSQL data storage
