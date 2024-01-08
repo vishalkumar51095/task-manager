@@ -130,8 +130,8 @@ def get_all_users(current_user):
 @app.route('/user/<public_id>', methods=['GET'])
 @token_required
 def get_one_user(current_user, public_id):
-    if not current_user.admin:
-        return jsonify({'message': 'Cannot perform that function!'})
+    # if not current_user.admin:
+    #     return jsonify({'message': 'Cannot perform that function!'})
 
     user = User.query.filter_by(public_id=public_id).first()
 
@@ -156,10 +156,20 @@ def promote_user(current_user, public_id):
     if not user:
         return jsonify({'message': 'No user found!'})
 
-    user.admin = True
+    data = request.get_json()
+
+    # Update user fields if they exist in the request data
+    if 'email' in data:
+        user.email = data['email']
+    if 'name' in data:
+        user.name = data['name']
+    if 'password' in data:
+        user.password = data['password']
+
+    # Save the changes to the user
     db.session.commit()
 
-    return jsonify({'message': 'The user has been promoted!'})
+    return jsonify({'message': 'The user has been updated!'})
 
 
 @app.route('/user/<public_id>', methods=['DELETE'])
@@ -267,14 +277,21 @@ def create_task(current_user):
     return jsonify({'message': 'New task created!'}), 201
 
 
-# Update a task by sno
 @app.route('/task/<int:sno>', methods=['PUT'])
 @token_required
 def update_task(current_user, sno):
-    task = Task.query.filter_by(sno=sno, user_id=current_user.id)
+    task = Task.query.filter_by(sno=sno, user_id=current_user.id).first()
+
+    if not task:
+        return jsonify({'message': 'Task not found or unauthorized!'})
+
     data = request.get_json()
-    task.title = data['title']
-    task.desc = data['desc']
+
+    if 'title' in data:
+        task.title = data['title']
+    if 'desc' in data:
+        task.desc = data['desc']
+
     db.session.commit()
     return jsonify({'message': 'Task updated!'})
 
@@ -282,12 +299,11 @@ def update_task(current_user, sno):
 # Delete a task by sno
 @app.route('/task/<int:sno>', methods=['DELETE'])
 @token_required
-def delete_task(sno, current_user):
-    task = Task.query.filter_by(id=sno, user_id=current_user.id)
+def delete_task(current_user,sno):
+    task = Task.query.filter_by(sno=sno, user_id=current_user.id).first()
     db.session.delete(task)
     db.session.commit()
     return jsonify({'message': 'Task deleted!'})
-
 
 @app.route('/tasks', methods=['GET'])
 @token_required
