@@ -338,6 +338,5 @@ def get_tasks_by_sno(current_user, sno):
 
     return jsonify({'tasks': output})
 
-
 if __name__ == '__main__':
     app.run(debug=True)
