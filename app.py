@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 app.config['SECRET_KEY'] = '70efba9dd09069540fb7ee09'
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:vishal@localhost:5432/task-manager'
-app.config['SQLALCHEMY_DATABASE_URI']=environ.get('DB_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = environ.get('DB_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -255,21 +255,33 @@ def create_task(current_user):
 @app.route('/task/<int:sno>', methods=['PUT'])
 @token_required
 def update_task(current_user, sno):
-    task = Task.query.filter_by(sno=sno, user_id=current_user.id)
+    task = Task.query.filter_by(sno=sno, user_id=current_user.id).first()
+
+    if not task:
+        return jsonify({'message': 'Task not found or unauthorized!'})
+
     data = request.get_json()
-    task.title = data['title']
-    task.desc = data['desc']
+    task.title = data.get('title', task.title)
+    task.desc = data.get('desc', task.desc)
     db.session.commit()
     return jsonify({'message': 'Task updated!'})
+
 
 
 # Delete a task by sno
 @app.route('/task/<int:sno>', methods=['DELETE'])
 @token_required
-def delete_task(sno, current_user):
-    task = Task.query.filter_by(id=sno, user_id=current_user.id)
+def delete_task(current_user, sno):
+    task = Task.query.filter_by(id=sno, user_id=current_user.id).first()
+
+    if not task:
+        app.logger.warning(f"Task with sno={sno} not found or unauthorized for user_id={current_user.id}")
+        return jsonify({'message': 'Task not found or unauthorized!'})
+
     db.session.delete(task)
     db.session.commit()
+
+    app.logger.info(f"Task with sno={sno} deleted by user_id={current_user.id}")
     return jsonify({'message': 'Task deleted!'})
 
 
@@ -277,6 +289,10 @@ def delete_task(sno, current_user):
 @token_required
 def get_all_tasks(current_user):
     tasks = Task.query.filter_by(user_id=int(current_user.id)).all()
+
+    if not tasks:
+        app.logger.warning(f"No tasks available for user_id={current_user.id}")
+        return jsonify({'message': 'No tasks available for this user.'})
 
     output = []
 
@@ -296,15 +312,14 @@ def get_all_tasks(current_user):
 @app.route('/task/<int:sno>', methods=['GET'])
 @token_required
 def get_tasks_by_sno(current_user, sno):
-    tasks = Task.query.filter_by(sno=sno, user_id=current_user.id)
+    task = Task.query.filter_by(sno=sno, user_id=current_user.id).first()
 
-    output = []
+    if not task:
+        app.logger.warning(f"Task with sno={sno} not found or unauthorized for user_id={current_user.id}")
+        return jsonify({'message': 'Task not found or unauthorized!'})
 
-    for task in tasks:
-        task_data = {'sno': task.sno, 'title': task.title, 'description': task.desc, 'create_date': task.date_created}
-        output.append(task_data)
-
-    return jsonify({'tasks': output})
+    task_data = {'sno': task.sno, 'title': task.title, 'description': task.desc, 'create_date': task.date_created}
+    return jsonify({'tasks': task_data})
 
 
 if __name__ == '__main__':
