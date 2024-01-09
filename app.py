@@ -14,8 +14,8 @@ import logging
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = '70efba9dd09069540fb7ee09'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:vishal@localhost:5432/task-manager'
-# app.config['SQLALCHEMY_DATABASE_URI']=environ.get('DB_URL')
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:vishal@localhost:5432/task-manager'
+app.config['SQLALCHEMY_DATABASE_URI']=environ.get('DB_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
