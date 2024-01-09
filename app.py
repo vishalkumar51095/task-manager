@@ -8,6 +8,8 @@ from sqlalchemy.orm import relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
 from os import environ
+import logging
+
 
 app = Flask(__name__)
 
@@ -18,6 +20,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 
 # Database ORMs
 class User(db.Model):
@@ -26,7 +32,7 @@ class User(db.Model):
     name = db.Column(db.String(100))
     email = db.Column(db.String(70), unique=True)
     password = db.Column(db.String(255))
-    admin = db.Column(db.Boolean)
+    admin = db.Column(db.Boolean, default=False)
 
     # Define the relationship back to Task model
     tasks = relationship('Task', back_populates='user')
@@ -63,6 +69,7 @@ def token_required(f):
             token = request.headers['x-access-token']
         # return 401 if token is not passed
         if not token:
+            app.logger.warning('Token is missing !!')
             return jsonify({'message': 'Token is missing !!'}), 401
 
         try:
@@ -71,16 +78,20 @@ def token_required(f):
                 data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
                 # Proceed with the rest of your code
             except jwt.ExpiredSignatureError:
+                app.logger.warning('Token has expired!')
                 return jsonify({'message': 'Token has expired!'}), 401
             except jwt.InvalidTokenError:
+                app.logger.warning('Invalid token!')
                 return jsonify({'message': 'Invalid token!'}), 401
             except Exception as e:
+                app.logger.error('Error decoding token: ' + str(e))
                 return jsonify({'message': 'Error decoding token: ' + str(e)}), 500
             print(data)
             current_user = User.query \
                 .filter_by(public_id=data['public_id']) \
                 .first()
         except:
+            app.logger.warning('Token has expired!')
             return jsonify({
                 'message': 'Token is invalid !!'
             }), 401
@@ -96,6 +107,7 @@ def token_required(f):
 @token_required
 def get_all_users(current_user):
     if not current_user.admin:
+        app.logger.warning('Unauthorized access attempt to get all users!')
         return jsonify({'message': 'Cannot perform that function!'})
     # querying the database
     # for all the entries in it
@@ -118,8 +130,8 @@ def get_all_users(current_user):
 @app.route('/user/<public_id>', methods=['GET'])
 @token_required
 def get_one_user(current_user, public_id):
-    if not current_user.admin:
-        return jsonify({'message': 'Cannot perform that function!'})
+    # if not current_user.admin:
+    #     return jsonify({'message': 'Cannot perform that function!'})
 
     user = User.query.filter_by(public_id=public_id).first()
 
@@ -136,6 +148,7 @@ def get_one_user(current_user, public_id):
 @token_required
 def promote_user(current_user, public_id):
     if not current_user.admin:
+        app.logger.warning('Unauthorized access attempt to get all users!')
         return jsonify({'message': 'Cannot perform that function!'})
 
     user = User.query.filter_by(public_id=public_id).first()
@@ -143,16 +156,27 @@ def promote_user(current_user, public_id):
     if not user:
         return jsonify({'message': 'No user found!'})
 
-    user.admin = True
+    data = request.get_json()
+
+    # Update user fields if they exist in the request data
+    if 'email' in data:
+        user.email = data['email']
+    if 'name' in data:
+        user.name = data['name']
+    if 'password' in data:
+        user.password = data['password']
+
+    # Save the changes to the user
     db.session.commit()
 
-    return jsonify({'message': 'The user has been promoted!'})
+    return jsonify({'message': 'The user has been updated!'})
 
 
 @app.route('/user/<public_id>', methods=['DELETE'])
 @token_required
 def delete_user(current_user, public_id):
     if not current_user.admin:
+        app.logger.warning('Unauthorized access attempt to get all users!')
         return jsonify({'message': 'Cannot perform that function!'})
 
     user = User.query.filter_by(public_id=public_id).first()
@@ -170,7 +194,7 @@ def delete_user(current_user, public_id):
 @app.route('/login', methods=['POST'])
 def login():
     # creates dictionary of form data
-    auth = request.form
+    auth = request.get_json()
 
     if not auth or not auth.get('email') or not auth.get('password'):
         # returns 401 if any email or / and password is missing
@@ -212,11 +236,12 @@ def login():
 @app.route('/signup', methods=['POST'])
 def signup():
     # creates a dictionary of the form data
-    data = request.form
+    data = request.get_json()
 
     # gets name, email and password
     name, email = data.get('name'), data.get('email')
     password = data.get('password')
+    admin = data.get('admin')
 
     # checking for existing user
     user = User.query \
@@ -228,7 +253,8 @@ def signup():
             public_id=str(uuid.uuid4()),
             name=name,
             email=email,
-            password=generate_password_hash(password)
+            password=generate_password_hash(password),
+            admin=admin
         )
         # insert user
         db.session.add(user)
@@ -251,7 +277,6 @@ def create_task(current_user):
     return jsonify({'message': 'New task created!'}), 201
 
 
-# Update a task by sno
 @app.route('/task/<int:sno>', methods=['PUT'])
 @token_required
 def update_task(current_user, sno):
@@ -261,8 +286,12 @@ def update_task(current_user, sno):
         return jsonify({'message': 'Task not found or unauthorized!'})
 
     data = request.get_json()
-    task.title = data.get('title', task.title)
-    task.desc = data.get('desc', task.desc)
+
+    if 'title' in data:
+        task.title = data['title']
+    if 'desc' in data:
+        task.desc = data['desc']
+
     db.session.commit()
     return jsonify({'message': 'Task updated!'})
 
@@ -283,7 +312,6 @@ def delete_task(current_user, sno):
 
     app.logger.info(f"Task with sno={sno} deleted by user_id={current_user.id}")
     return jsonify({'message': 'Task deleted!'})
-
 
 @app.route('/tasks', methods=['GET'])
 @token_required
